@@ -5,192 +5,59 @@
 <title>Live Cam</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0b5cff">
-
-<style>
-body {
-    margin: 0;
-    background: #0f172a;
-    color: #fff;
-    font-family: Arial, sans-serif;
-}
-header {
-    background: #0b5cff;
-    padding: 12px;
-    text-align: center;
-    font-weight: bold;
-}
-#controls {
-    padding: 12px;
-    text-align: center;
-}
-button, input {
-    padding: 10px;
-    border-radius: 6px;
-    border: none;
-    font-size: 14px;
-}
-button {
-    background: #0b5cff;
-    color: #fff;
-    cursor: pointer;
-}
-button:disabled {
-    background: #555;
-}
-input {
-    width: 220px;
-    margin-top: 8px;
-}
-.actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    justify-content: center;
-    margin-top: 10px;
-}
-#link {
-    margin-top: 10px;
-    font-size: 13px;
-    word-break: break-all;
-    color: #22c55e;
-}
-#videos {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    padding: 10px;
-    justify-content: center;
-}
-video {
-    width: 220px;
-    border-radius: 8px;
-    background: black;
-}
-.status {
-    font-size: 13px;
-    color: #94a3b8;
-    margin-top: 6px;
-}
-</style>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 
 <body>
 <header>📡 Live Cam</header>
 
 <div id="controls">
-    <button id="btnLink" disabled>🔗 Gerar Link</button>
-
-    <div id="link"></div>
-
-    <div class="actions">
-        <button id="btnCopy">📋 Copiar</button>
+    <button id="btnToggleControls">➖ Ocultar Botões</button>
+    <div id="controlButtons">
+        <button id="btnLink" disabled>🔗 Gerar Link</button>
+        <button id="btnCopy" disabled>📋 Copiar Link</button>
+        <button id="btnDeleteLink" disabled>❌ Excluir Link</button>
+        <button id="btnRecord" disabled>⏺️ Gravar Vídeo</button>
+        <button id="btnBlur" disabled>🔒 Desfocar Vídeo</button>
+        <button id="btnToggleChat">➖ Ocultar Chat</button>
+        <button id="btnSwitchCamera" style="display:none;">🔄 Trocar Câmera</button>
+        <button id="btnReload" style="display:none;">🔄 Recarregar</button>
+        <input type="tel" id="recipientPhone" placeholder="+55 (DDD) 9XXXX-XXXX">
+        <button id="btnSendWhatsApp" disabled>📱 WhatsApp</button>
+        <button id="btnSendSMS" disabled>💬 SMS</button>
     </div>
-
-    <input type="tel" id="phone" placeholder="Telefone com DDD">
-
-    <div class="actions">
-        <button id="btnSMS">📩 SMS</button>
-        <button id="btnWhats">💬 WhatsApp</button>
-    </div>
-
     <div class="status" id="status">Inicializando conexão...</div>
+    <div id="link"></div>
 </div>
 
-<div id="videos"></div>
+<div id="mainLayout">
+    <div id="leftPane">
+        <div id="videoContainer">
+            <div id="videos"></div>
+            <div id="chat">
+                <div id="chatHeader">
+                    <span>💬</span>
+                </div>
+                <div id="chatMessages"></div>
+                <div id="chatInput">
+                    <button id="btnImage" title="Enviar imagem">📎</button>
+                    <input type="file" id="imageInput" accept="image/jpeg,image/jpg,image/gif" style="display:none;">
+                    <input type="text" id="messageInput" placeholder="Digite uma mensagem...">
+                    <button id="btnSend">Enviar</button>
+                </div>
+            </div>
+        </div>
+        <div id="addressLeft"></div>
+    </div>
+    <div id="rightPane">
+        <div id="addressRight"></div>
+        <div id="map"></div>
+    </div>
+</div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-
-<script>
-const videos = document.getElementById("videos");
-const btnLink = document.getElementById("btnLink");
-const btnCopy = document.getElementById("btnCopy");
-const btnSMS = document.getElementById("btnSMS");
-const btnWhats = document.getElementById("btnWhats");
-const linkDiv = document.getElementById("link");
-const phoneInput = document.getElementById("phone");
-const statusEl = document.getElementById("status");
-
-let peerId;
-let localStream;
-let generatedLink = "";
-
-const peer = new Peer();
-
-/* Camera */
-async function startCamera() {
-    if (localStream) return;
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    addVideo(localStream, true);
-}
-
-/* Video */
-function addVideo(stream, muted = false) {
-    const video = document.createElement("video");
-    video.srcObject = stream;
-    video.autoplay = true;
-    video.playsInline = true;
-    video.muted = muted;
-    videos.appendChild(video);
-}
-
-/* Peer pronto */
-peer.on("open", async id => {
-    peerId = id;
-    btnLink.disabled = false;
-    statusEl.innerText = "Conectado. Gere o link.";
-
-    const params = new URLSearchParams(location.search);
-    const room = params.get("r");
-
-    if (room) {
-        await startCamera();
-        const call = peer.call(room, localStream);
-        call.on("stream", s => addVideo(s));
-    }
-});
-
-/* Receber chamada */
-peer.on("call", async call => {
-    await startCamera();
-    call.answer(localStream);
-    call.on("stream", s => addVideo(s));
-    statusEl.innerText = "Visitante conectado";
-});
-
-/* Gerar link */
-btnLink.onclick = () => {
-    generatedLink = `${location.origin}${location.pathname}?r=${peerId}`;
-    linkDiv.innerText = generatedLink;
-    statusEl.innerText = "Link gerado";
-};
-
-/* Copiar */
-btnCopy.onclick = () => {
-    if (!generatedLink) return;
-    navigator.clipboard.writeText(generatedLink);
-    statusEl.innerText = "Link copiado";
-};
-
-/* SMS */
-btnSMS.onclick = () => {
-    if (!generatedLink) return alert("Gere o link primeiro");
-    const phone = phoneInput.value.replace(/\D/g, "");
-    if (!phone) return alert("Informe o telefone");
-
-    const msg = encodeURIComponent("Acesse a live: " + generatedLink);
-    window.location.href = `sms:${phone}?body=${msg}`;
-};
-
-/* WhatsApp */
-btnWhats.onclick = () => {
-    if (!generatedLink) return alert("Gere o link primeiro");
-    const phone = phoneInput.value.replace(/\D/g, "");
-    if (!phone) return alert("Informe o telefone");
-
-    const msg = encodeURIComponent("Acesse a live: " + generatedLink);
-    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
-};
-</script>
-
+<script type="module" src="app.js"></script>
 </body>
 </html>
